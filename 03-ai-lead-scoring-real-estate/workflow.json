@@ -1,0 +1,845 @@
+{
+  "name": "AI Lead Qualifier – Real Estate Agency",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "7a598dc4-3ff0-4e24-8263-e40eeb5353e1",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "3d3084a6-d055-4c46-a1be-446a6d4aa443",
+      "name": "Receive Typeform Lead",
+      "webhookId": "7a598dc4-3ff0-4e24-8263-e40eeb5353e1",
+      "notesInFlow": true,
+      "notes": "Receives POST request from Typeform webhook when a new form is submitted."
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"imie\": \"{{ $json.body.form_response.answers[0].text }}\",\n  \"budzet\": \"{{ $json.body.form_response.answers[1].choice.label }}\",\n  \"cel\": \"{{ $json.body.form_response.answers[2].choice.label }}\",\n  \"czas_zakupu\": \"{{ $json.body.form_response.answers[3].choice.label }}\",\n  \"email\": \"{{ $json.body.form_response.answers[4].email }}\",\n  \"telefon\": \"{{ $json.body.form_response.answers[5].phone_number }}\",\n  \"response_id\": \"{{ $json.body.form_response.token }}\",\n  \"submitted_at\": \"{{ $json.body.form_response.submitted_at }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "789653dc-e6a2-44fe-97ed-952751cee7d6",
+      "name": "Extract Lead Data",
+      "notesInFlow": true,
+      "notes": "Maps raw Typeform answers to clean variables: name, phone, budget, goal, timeline."
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Jesteś ekspertem ds. kwalifikacji leadów dla agencji nieruchomości.\nNa podstawie danych z formularza oceń potencjał klienta.\n\nZASADY KLASYFIKACJI (bezwzględne):\n- HOT: budżet realny + zakup do 3 miesięcy + konkretny cel\n- WARM: budżet realny LUB konkretny cel, ale czas powyżej 3 miesięcy\n- COLD: brak budżetu (\"Nie wiem jeszcze\") LUB zakup za ponad rok\n- NIE zakładaj danych których nie ma w formularzu\n- Jeśli brakuje kluczowych danych → klasyfikuj jako WARM\n\nZWRÓĆ WYŁĄCZNIE obiekt JSON, bez żadnego dodatkowego tekstu, bez markdown, bez backticks:\n{\n  \"klasyfikacja\": \"HOT\" | \"WARM\" | \"COLD\",\n  \"score\": 1-10,\n  \"uzasadnienie\": \"Maks. 2 zdania dla agenta.\",\n  \"rekomendacja\": \"Co agent powinien zrobić jako pierwszy krok.\"\n}",
+              "role": "model"
+            },
+            {
+              "content": "={{ $json.imie }}{{ $json.budzet }}{{ $json.cel }}{{ $json.czas_zakupu }}{{ $json.telefon }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "c877944c-7897-4e46-a909-bdac9a1af874",
+      "name": "Classify Lead with AI",
+      "notesInFlow": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "0MhQITkTNTWmWNWU",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      },
+      "notes": "Sends lead data to Google Gemini 2.0 Flash. Returns HOT/WARM/COLD classification, score 1-10, justification and recommended action in JSON format."
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.content.parts[0].text;\nconst parsed = JSON.parse(raw);\nreturn [{ json: parsed }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        768,
+        0
+      ],
+      "id": "0f2ec32b-e953-4fb2-a8ea-af9111acb908",
+      "name": "Parse AI Response",
+      "notesInFlow": true,
+      "notes": "Extracts and parses the JSON object returned by Gemini into structured fields."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.klasyfikacja }}",
+                    "rightValue": "HOT",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "35a3050a-3510-402d-980c-2dc8bc203a26"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "f5f10819-0a22-4866-b53a-5e40797831b3",
+                    "leftValue": "={{ $json.klasyfikacja }}",
+                    "rightValue": "WARM",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "6ec57319-974e-4c10-8793-03353d36c4bf",
+                    "leftValue": "={{ $json.klasyfikacja }}",
+                    "rightValue": "COLD",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        976,
+        -16
+      ],
+      "id": "bea67058-88e7-4301-b39a-bd70e8521303",
+      "name": "Route by Classification",
+      "notesInFlow": true,
+      "notes": "Routes the lead to the correct branch based on AI classification: HOT, WARM or COLD."
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1xrrjkyeK0P2eVzE78QOj_1UGBcSQuId3cOL1FC_Unq8",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CRM Leady",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "data": "={{ new Date().toLocaleDateString('pl-PL') }}",
+            "imie": "={{ $('Extract Lead Data').item.json.imie }}",
+            "telefon": "={{ $('Extract Lead Data').item.json.telefon }}",
+            "budżet": "={{ $('Extract Lead Data').item.json.budzet }}",
+            "cel": "={{ $('Extract Lead Data').item.json.cel }}",
+            "czas_zakupu": "={{ $('Extract Lead Data').item.json.czas_zakupu }}",
+            "klasyfikacja": "={{ $json.klasyfikacja }}",
+            "score": "={{ $json.score }}",
+            "uzasadnienie ": "={{ $json.uzasadnienie }}",
+            "rekomendacja": "={{ $json.rekomendacja }}"
+          },
+          "matchingColumns": [
+            "telefon"
+          ],
+          "schema": [
+            {
+              "id": "data",
+              "displayName": "data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "imie",
+              "displayName": "imie",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "telefon",
+              "displayName": "telefon",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "budżet",
+              "displayName": "budżet",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "cel",
+              "displayName": "cel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "czas_zakupu",
+              "displayName": "czas_zakupu",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "klasyfikacja",
+              "displayName": "klasyfikacja",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "uzasadnienie ",
+              "displayName": "uzasadnienie ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "rekomendacja",
+              "displayName": "rekomendacja",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1280,
+        -208
+      ],
+      "id": "9c57e584-f47e-4841-8254-ac9ff332705f",
+      "name": "Save HOT Lead to CRM",
+      "notesInFlow": true,
+      "credentials": {
+        "googleApi": {
+          "id": "59M03rhni7Z1SrJr",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Appends HOT lead data to Google Sheets CRM with all fields and AI evaluation."
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1xrrjkyeK0P2eVzE78QOj_1UGBcSQuId3cOL1FC_Unq8",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CRM Leady",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "data": "={{ new Date().toLocaleDateString('pl-PL') }}",
+            "imie": "={{ $('Extract Lead Data').item.json.imie }}",
+            "telefon": "={{ $('Extract Lead Data').item.json.telefon }}",
+            "budżet": "={{ $('Extract Lead Data').item.json.budzet }}",
+            "cel": "={{ $('Extract Lead Data').item.json.cel }}",
+            "czas_zakupu": "={{ $('Extract Lead Data').item.json.czas_zakupu }}",
+            "klasyfikacja": "={{ $json.klasyfikacja }}",
+            "score": "={{ $json.score }}",
+            "uzasadnienie ": "={{ $json.uzasadnienie }}",
+            "rekomendacja": "={{ $json.rekomendacja }}"
+          },
+          "matchingColumns": [
+            "telefon"
+          ],
+          "schema": [
+            {
+              "id": "data",
+              "displayName": "data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "imie",
+              "displayName": "imie",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "telefon",
+              "displayName": "telefon",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "budżet",
+              "displayName": "budżet",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "cel",
+              "displayName": "cel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "czas_zakupu",
+              "displayName": "czas_zakupu",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "klasyfikacja",
+              "displayName": "klasyfikacja",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "uzasadnienie ",
+              "displayName": "uzasadnienie ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "rekomendacja",
+              "displayName": "rekomendacja",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1264,
+        0
+      ],
+      "id": "f36f33ea-1b2f-44f4-9f3e-d987e8c911eb",
+      "name": "Save WARM Lead to CRM",
+      "notesInFlow": true,
+      "credentials": {
+        "googleApi": {
+          "id": "59M03rhni7Z1SrJr",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Appends WARM lead data to Google Sheets CRM with all fields and AI evaluation."
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1xrrjkyeK0P2eVzE78QOj_1UGBcSQuId3cOL1FC_Unq8",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "CRM Leady",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "data": "={{ new Date().toLocaleDateString('pl-PL') }}",
+            "imie": "={{ $('Extract Lead Data').item.json.imie }}",
+            "telefon": "={{ $('Extract Lead Data').item.json.telefon }}",
+            "budżet": "={{ $('Extract Lead Data').item.json.budzet }}",
+            "cel": "={{ $('Extract Lead Data').item.json.cel }}",
+            "czas_zakupu": "={{ $('Extract Lead Data').item.json.czas_zakupu }}",
+            "klasyfikacja": "={{ $json.klasyfikacja }}",
+            "score": "={{ $json.score }}",
+            "uzasadnienie ": "={{ $json.uzasadnienie }}",
+            "rekomendacja": "={{ $json.rekomendacja }}"
+          },
+          "matchingColumns": [
+            "telefon"
+          ],
+          "schema": [
+            {
+              "id": "data",
+              "displayName": "data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "imie",
+              "displayName": "imie",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "telefon",
+              "displayName": "telefon",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "budżet",
+              "displayName": "budżet",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "cel",
+              "displayName": "cel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "czas_zakupu",
+              "displayName": "czas_zakupu",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "klasyfikacja",
+              "displayName": "klasyfikacja",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "uzasadnienie ",
+              "displayName": "uzasadnienie ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "rekomendacja",
+              "displayName": "rekomendacja",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1280,
+        224
+      ],
+      "id": "d274381e-ef14-4de5-beb7-f298e9a146fb",
+      "name": "Save COLD Lead to CRM",
+      "notesInFlow": true,
+      "credentials": {
+        "googleApi": {
+          "id": "59M03rhni7Z1SrJr",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Appends COLD lead data to Google Sheets CRM with all fields and AI evaluation."
+    },
+    {
+      "parameters": {
+        "from": "+14058497931",
+        "to": "+48 502 231 667",
+        "message": "=🔴 HOT: {{ $('Extract Lead Data').item.json.imie }}\nTel: {{ $('Extract Lead Data').item.json.telefon }}\nBudżet: {{ $('Extract Lead Data').item.json.budzet }}\nCzas: {{ $('Extract Lead Data').item.json.czas_zakupu }}\nScore: {{ $json.score }}/10",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1488,
+        -208
+      ],
+      "id": "6cb0d2bc-1d0c-44fa-b4fe-9637cfb8f101",
+      "name": "Notify Agent via SMS",
+      "notesInFlow": true,
+      "credentials": {
+        "twilioApi": {
+          "id": "PrHXYwJxx0q9VZpM",
+          "name": "Twilio account"
+        }
+      },
+      "notes": "Sends an SMS notification to the real estate agent when a HOT lead is received. Includes lead name, budget, goal, timeline and AI recommendation."
+    },
+    {
+      "parameters": {
+        "fromEmail": "kajetanzygowski@gmail.com",
+        "toEmail": "={{ $('Extract Lead Data').item.json.email }}",
+        "subject": "Dziękujemy za zainteresowanie – wkrótce się odezwiemy",
+        "html": "=<p>Dzień dobry <strong>{{ $('Extract Lead Data').item.json.imie }}</strong>,</p>\n\n<p>Dziękujemy za wypełnienie formularza.</p>\n\n<p>Nasz agent zapoznał się z Twoimi preferencjami i skontaktuje się z Tobą wkrótce, aby przedstawić najlepsze oferty dopasowane do Twoich potrzeb.</p>\n\n<p>Do zobaczenia,<br>\n<strong>Zespół Agencji</strong></p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1488,
+        0
+      ],
+      "id": "dd3c64e2-0baf-4842-85ac-692af40af8d3",
+      "name": "Send Confirmation Email – WARM",
+      "webhookId": "e020296b-bab0-46f9-a494-2fcbb4c61d3e",
+      "notesInFlow": true,
+      "credentials": {
+        "smtp": {
+          "id": "ZpRnTqh7DYVEl6An",
+          "name": "SMTP account"
+        }
+      },
+      "notes": "Sends a confirmation email to the lead after WARM classification. Notifies the client that an agent will contact them soon."
+    },
+    {
+      "parameters": {
+        "fromEmail": "kajetanzygowski@gmail.com",
+        "toEmail": "={{ $('Extract Lead Data').item.json.email }}",
+        "subject": "Dziękujemy za zainteresowanie – wkrótce się odezwiemy",
+        "html": "=<p>Dzień dobry <strong>{{ $('Extract Lead Data').item.json.imie }}</strong>,</p>\n\n<p>Dziękujemy za wypełnienie formularza.</p>\n\n<p>Nasz agent zapoznał się z Twoimi preferencjami i skontaktuje się z Tobą wkrótce, aby przedstawić najlepsze oferty dopasowane do Twoich potrzeb.</p>\n\n<p>Do zobaczenia,<br>\n<strong>Zespół Agencji</strong></p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1696,
+        -208
+      ],
+      "id": "9a9db1c3-844c-4462-b87e-7a0fa43f9bcd",
+      "name": "Send Confirmation Email – HOT",
+      "webhookId": "e020296b-bab0-46f9-a494-2fcbb4c61d3e",
+      "notesInFlow": true,
+      "credentials": {
+        "smtp": {
+          "id": "ZpRnTqh7DYVEl6An",
+          "name": "SMTP account"
+        }
+      },
+      "notes": "Sends a confirmation email to the lead after HOT classification. Notifies the client that an agent will contact them shortly."
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Receive Typeform Lead": {
+      "main": [
+        [
+          {
+            "node": "Extract Lead Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Lead Data": {
+      "main": [
+        [
+          {
+            "node": "Classify Lead with AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Lead with AI": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "Route by Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Classification": {
+      "main": [
+        [
+          {
+            "node": "Save HOT Lead to CRM",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save WARM Lead to CRM",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save COLD Lead to CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save HOT Lead to CRM": {
+      "main": [
+        [
+          {
+            "node": "Notify Agent via SMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save WARM Lead to CRM": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation Email – WARM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Agent via SMS": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation Email – HOT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "8a58c0a3-09af-4f85-81db-0e26d758de6d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6dcf187e3445dae15d704b4e932d118198c4659827e2660010276513c3882f6d"
+  },
+  "nodeGroups": [],
+  "id": "pCtyisNz5Hf25VY4",
+  "tags": []
+}
