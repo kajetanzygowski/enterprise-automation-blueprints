@@ -1,0 +1,964 @@
+{
+  "name": "Infographics Orchestrator",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "content"
+            },
+            {
+              "name": "postId"
+            },
+            {
+              "name": "maxInfographics"
+            },
+            {
+              "name": "resolution"
+            },
+            {
+              "name": "wpBaseUrl"
+            },
+            {
+              "name": "dryRun"
+            },
+            {
+              "name": "replaceExisting"
+            }
+          ]
+        }
+      },
+      "id": "4ac7d216-6d08-453c-acbc-961583c96e5c",
+      "name": "Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -3264,
+        528
+      ],
+      "notesInFlow": true,
+      "notes": "Entry. Inputs: content (optional — empty ⇒ fetch from WP), postId, maxInfographics (3), resolution wpBaseUrl, dryRun, replaceExisting."
+    },
+    {
+      "parameters": {
+        "jsCode": "const t = $input.first().json;\nconst content = (t.content ?? \"\").toString();\nconst postId = (t.postId ?? \"\");\nconst maxInfographics = Number(t.maxInfographics) > 0 ? Number(t.maxInfographics) : 3;\nconst resolution = ((t.resolution ?? \"\").toString().trim()) || \"1080x1350\";\nconst dryRun = (t.dryRun === true || t.dryRun === \"true\" || t.dryRun === 1 || t.dryRun === \"1\");\nconst replaceExisting = (t.replaceExisting === undefined || t.replaceExisting === null || t.replaceExisting === \"\") ? true : (t.replaceExisting === true || t.replaceExisting === \"true\" || t.replaceExisting === 1 || t.replaceExisting === \"1\");\nlet envUrl = \"\";\ntry { envUrl = ($env && $env.WP_BASE_URL) ? $env.WP_BASE_URL : \"\"; } catch (e) { envUrl = \"\"; }\nconst wpBaseUrl = (((t.wpBaseUrl ?? \"\").toString().trim()) || envUrl).replace(/\\/$/, \"\");\nreturn [{ json: { content, postId, maxInfographics, resolution, wpBaseUrl, dryRun, replaceExisting } }];"
+      },
+      "id": "2471dc13-40d8-459c-831d-d26bf995ec5d",
+      "name": "Prepare Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2816,
+        528
+      ],
+      "notesInFlow": true,
+      "notes": "Defaulty + dryRun + wpBaseUrl (input/$env)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "nf1",
+              "leftValue": "={{ $json.content }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "nf2",
+              "leftValue": "={{ $json.postId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5c90bf29-e2c8-4168-8f95-200866ec508c",
+      "name": "Need Fetch?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2592,
+        528
+      ],
+      "notesInFlow": true,
+      "notes": "content empty + postId present → fetch from WP. Otherwise use the provided content"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Prepare Input').first().json.wpBaseUrl }}{{ $('Vars').first().json.apiPrefix }}/posts/{{ $('Prepare Input').first().json.postId }}?context=edit&_fields=content",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "wordpressApi",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "7c2b2dac-119b-4596-9276-e44ba0cf1436",
+      "name": "Fetch Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -2368,
+        464
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "notesInFlow": true,
+      "onError": "continueRegularOutput",
+      "notes": " GET the current post content from WP (context=edit ⇒ content.raw). On error → empty content. Retry 3×."
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $('Prepare Input').first().json;\nconst j = $input.first().json;\nlet content = \"\";\nif (j && j.content && typeof j.content === \"object\") content = j.content.raw || j.content.rendered || \"\";\nelse content = (p.content || \"\");\nconst saveMode = p.dryRun ? \"dryrun\" : \"save\";\nreturn [{ json: { content: content, postId: p.postId, maxInfographics: p.maxInfographics, resolution: p.resolution, wpBaseUrl: p.wpBaseUrl, dryRun: p.dryRun, saveMode: saveMode, replaceExisting: p.replaceExisting } }];"
+      },
+      "id": "207911de-cb7a-4408-ba3b-ec23708b87a8",
+      "name": "Resolve Content",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2144,
+        528
+      ],
+      "notesInFlow": true,
+      "notes": "Canonical content (input or Fetch Post); carries postId / resolution / wpBaseUrl / dryRun / replaceExisting downstream."
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o",
+          "cachedResultName": "gpt-4o"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an infographics planner for the Polish blog biurka-regulowane.pl (client MainFlow). Analyze the article and decide which infographics would genuinely enrich it. Return STRICT JSON ONLY, no markdown, no preamble: {\"graphics\":[{\"spec\":\"...\",\"style\":\"...\",\"anchor\":\"...\",\"altText\":\"...\",\"fileName\":\"...\"}]}. EXISTING GRAPHICS: the article may already contain older inline infographics rendered as <figure class=\"wp-block-html\">...<svg>...</svg></figure>. Treat every such existing SVG graphic as one to MODERNIZE: for each, plan a new infographic that conveys the SAME information (read the SVG <text> labels to learn its title, topic and numbers), and set its 'anchor' to the exact text of the H2 or H3 heading immediately above that graphic, so the new one takes its place. Cover ALL existing SVG graphics first (each becomes exactly one planned infographic). Then add infographics for other data-rich sections. AIM TO USE THE FULL MAXIMUM number of infographics whenever the article contains enough distinct data-rich sections (lists, price tiers, comparisons, steps, specifications, statistics) to justify them — a rich long article should reach the maximum. Propose fewer than the maximum only when the article genuinely lacks enough distinct material. Rules: propose between 0 and the given maximum; never exceed the maximum. 0 is valid only when the article has neither existing SVG graphics nor any lists, data or comparisons. Each infographic must cover a DIFFERENT section and a different angle (do not duplicate the same data twice). Prefer sections with price tiers, comparison tables, steps, specifications or statistics. 'spec' = a full Polish content brief for the graphic (temat, konkretne punkty, liczby, ceny, teksty do wyrenderowania), in Polish. 'style' = describe a FLAT VECTOR infographic (flat illustration, not a photo) plus the chart type (lista, proces, porownanie, statystyka, tabela), and suggest a tasteful colour palette that SUITS THE TOPIC (varied and cohesive; do NOT force a single fixed brand colour). 'anchor' = the EXACT visible TEXT of an existing H2 or H3 heading in the article (copy the heading inner text verbatim, WITHOUT any HTML tags); the heading text MUST appear literally in the article; do not use tables, paragraphs or long HTML fragments as anchors; each infographic must use a DIFFERENT heading. 'altText' = concise Polish alt text. 'fileName' = kebab-case slug ending in .png."
+            },
+            {
+              "content": "=Maksymalna liczba infografik: {{ $('Resolve Content').first().json.maxInfographics }}. Rozdzielczosc: {{ $('Resolve Content').first().json.resolution }}.\n\nArtykul:\n{{ $('Resolve Content').first().json.content }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "9bad3dae-a713-420c-9c9e-38c3eddbb8e6",
+      "name": "Plan Infographics",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        -1920,
+        528
+      ],
+      "notesInFlow": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notes": "gpt-4o plans max infographics as strict JSON {graphics:[{spec,style,anchor,altText,fileName}]}."
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $input.first().json;\nlet text = (j.output && j.output[0] && j.output[0].content && j.output[0].content[0] && j.output[0].content[0].text) || j.content || j.text || (j.message && j.message.content) || '';\nif (typeof text !== 'string') text = JSON.stringify(text);\ntext = text.trim().replace(/^```(json)?/i, '').replace(/```$/, '').trim();\nlet parsed = {};\ntry { parsed = JSON.parse(text); } catch (e) { const mm = text.match(/\\{[\\s\\S]*\\}/); if (mm) { try { parsed = JSON.parse(mm[0]); } catch (e2) {} } }\nlet graphics = Array.isArray(parsed.graphics) ? parsed.graphics : [];\nconst max = Number($('Resolve Content').first().json.maxInfographics) || 3;\ngraphics = graphics.filter(function (g) { return g && g.spec && g.anchor; }).slice(0, max);\nif (graphics.length === 0) return [{ json: { _noGraphics: true } }];\nreturn graphics.map(function (g, i) {\n  let fn = String(g.fileName || ('infografika-' + (i + 1))).toLowerCase().replace(/\\.(png|jpe?g|webp)$/, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 60);\n  if (!fn) fn = 'infografika-' + (i + 1);\n  return { json: { index: i, spec: String(g.spec), style: String(g.style || ''), anchor: String(g.anchor), altText: String(g.altText || g.spec).slice(0, 180), fileName: fn + '.jpg' } };\n});"
+      },
+      "id": "e957b438-6210-48ab-8385-084d5d273949",
+      "name": "Parse Plan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1568,
+        528
+      ],
+      "notesInFlow": true,
+      "notes": "arses the plan JSON, clamps to max, validates spec+anchor. One item per graphic, or {_noGraphics:true}"
+    },
+    {
+      "parameters": {
+        "jsCode": "let results = [];\ntry { results = $('Build Result').all().map(function (i) { return i.json; }); } catch (e) { results = []; }\nconst survivors = $('Filter Graphics').all().map(function (i) { return i.json; }).filter(function (g) { return g && g.spec; });\nlet content = String($('Resolve Content').first().json.content || \"\");\nconst postId = $('Resolve Content').first().json.postId;\nconst replaceExisting = $('Resolve Content').first().json.replaceExisting !== false;\nconst dryRun = $('Resolve Content').first().json.dryRun === true;\nconst esc = function (s) { return String(s == null ? \"\" : s).replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\").replace(/\\\"/g, \"&quot;\"); };\nconst stripTags = function (s) { return String(s == null ? \"\" : s).replace(/<[^>]*>/g, \" \").replace(/\\s+/g, \" \").trim(); };\nconst OLD_RE = /<figure[^>]*class=\\\"[^\\\"]*wp-block-html[^\\\"]*\\\"[^>]*>[\\s\\S]*?<\\/figure>/gi;\nconst isOld = function (block) { return block.indexOf(\"<svg\") !== -1; };\nconst findOldBlocks = function (html) {\n  const blocks = []; let m; OLD_RE.lastIndex = 0;\n  while ((m = OLD_RE.exec(html)) !== null) { if (isOld(m[0])) blocks.push({ start: m.index, text: m[0] }); }\n  return blocks;\n};\nconst headingBefore = /<h[1-6][^>]*>[\\s]*$/i;\nconst findAnchorPos = function (html, anchor) {\n  if (!anchor) return -1;\n  let tocEnd = 0;\n  const tocM = html.match(/id=\\\"rank-math-toc\\\"[\\s\\S]*?<\\/nav>/i);\n  if (tocM) tocEnd = tocM.index + tocM[0].length;\n  const tryText = function (needle) {\n    if (!needle || needle.length < 5) return -1;\n    let from = 0, idx, firstBody = -1;\n    while ((idx = html.indexOf(needle, from)) !== -1) {\n      from = idx + 1;\n      if (idx < tocEnd) continue;\n      if (firstBody === -1) firstBody = idx;\n      const pre = html.slice(idx - 60 < 0 ? 0 : idx - 60, idx);\n      if (headingBefore.test(pre)) return idx;\n    }\n    return firstBody;\n  };\n  let p = tryText(anchor);\n  if (p !== -1) return p;\n  const at = stripTags(anchor);\n  p = tryText(at);\n  if (p !== -1) return p;\n  return tryText(at.slice(0, Math.min(50, at.length)));\n};\nlet inserted = 0, replaced = 0;\nconst mediaIds = [];\nconst okResults = results.filter(function (r) { return r && r.status === \"inserted\" && r.mediaId; });\nokResults.sort(function (a, b) { return (a.index || 0) - (b.index || 0); });\nfor (const r of okResults) {\n  const figure = '<figure class=\\\"wp-block-image size-large\\\"><img src=\\\"' + r.sourceUrl + '\\\" alt=\\\"' + esc(r.alt) + '\\\" class=\\\"wp-image-' + r.mediaId + '\\\" /></figure>';\n  if (content.indexOf(\"wp-image-\" + r.mediaId) !== -1) { inserted++; mediaIds.push(r.mediaId); continue; }\n  const rawAnchor = String(r.anchor || \"\");\n  const pos = findAnchorPos(content, rawAnchor);\n  let done = false;\n  if (replaceExisting) {\n    const oldBlocks = findOldBlocks(content);\n    if (oldBlocks.length) {\n      let best = null, bestDist = Infinity;\n      for (const b of oldBlocks) { const d = pos === -1 ? b.start : Math.abs(b.start - pos); if (d < bestDist) { bestDist = d; best = b; } }\n      if (best) { content = content.slice(0, best.start) + figure + content.slice(best.start + best.text.length); inserted++; replaced++; mediaIds.push(r.mediaId); done = true; }\n    }\n  }\n  if (!done) {\n    if (pos === -1) { continue; }\n    const rest = content.slice(pos);\n    const mm = rest.match(/<\\/(h[1-6]|p|ul|ol|table|figure|blockquote|div|section)>/i);\n    const insertPos = mm ? pos + mm.index + mm[0].length : (pos + rawAnchor.length);\n    content = content.slice(0, insertPos) + figure + content.slice(insertPos);\n    inserted++; mediaIds.push(r.mediaId);\n  }\n}\nconst skipped = Math.max(0, survivors.length - inserted);\nreturn [{ json: { updatedContent: content, postId: postId, inserted: inserted, skipped: skipped, replaced: replaced, mediaIds: mediaIds, dryRun: dryRun } }];"
+      },
+      "id": "06062144-43ab-4e4b-9b85-cf8852aeab3d",
+      "name": "Embed & Aggregate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        80
+      ],
+      "notesInFlow": true,
+      "notes": "On Loop done: rebuilds the post content — inserts <figure> after each graphic's anchor heading (skips the RankMath TOC); replaces an old inline-SVG only when a new graphic takes its place. Returns updatedContent, inserted, skipped, mediaIds, dryRun."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "postId": "={{ $json.postId }}",
+        "updateFields": {
+          "content": "={{ $json.updatedContent }}"
+        }
+      },
+      "id": "cfb03854-013c-40ac-a4b5-34f5e7f2fe7d",
+      "name": "Update Post",
+      "type": "n8n-nodes-base.wordpress",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "notesInFlow": true,
+      "onError": "continueErrorOutput",
+      "notes": "Atomic single-request content update (only when not dry-run). Error → Build Error."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "sm1",
+              "name": "postId",
+              "type": "string",
+              "value": "={{ $('Embed & Aggregate').first().json.postId }}"
+            },
+            {
+              "id": "sm2",
+              "name": "inserted",
+              "type": "number",
+              "value": "={{ $('Embed & Aggregate').first().json.inserted }}"
+            },
+            {
+              "id": "sm3",
+              "name": "skipped",
+              "type": "number",
+              "value": "={{ $('Embed & Aggregate').first().json.skipped }}"
+            },
+            {
+              "id": "sm4",
+              "name": "mediaIds",
+              "type": "array",
+              "value": "={{ $('Embed & Aggregate').first().json.mediaIds }}"
+            },
+            {
+              "id": "sm5",
+              "name": "mode",
+              "type": "string",
+              "value": "={{ $('Resolve Content').first().json.dryRun ? 'dry-run (wpis NIE zapisany)' : 'saved' }}"
+            },
+            {
+              "id": "sm6",
+              "name": "updatedContent",
+              "type": "string",
+              "value": "={{ $('Embed & Aggregate').first().json.updatedContent }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "06a408ab-867f-41e5-b7a9-456aeed33990",
+      "name": "Summary",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        0
+      ],
+      "notesInFlow": true,
+      "notes": "Result: {postId, inserted, skipped, mediaIds, mode (dry-run/saved), updatedContent}."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "be1",
+              "name": "success",
+              "type": "boolean",
+              "value": false
+            },
+            {
+              "id": "be2",
+              "name": "error",
+              "type": "string",
+              "value": "={{ 'Post update failed: ' + ($json.error?.message ?? $json.error ?? $json.message ?? 'unknown') }}"
+            },
+            {
+              "id": "be3",
+              "name": "postId",
+              "type": "string",
+              "value": "={{ $('Embed & Aggregate').first().json.postId }}"
+            },
+            {
+              "id": "be4",
+              "name": "inserted",
+              "type": "number",
+              "value": "={{ $('Embed & Aggregate').first().json.inserted }}"
+            },
+            {
+              "id": "be5",
+              "name": "skipped",
+              "type": "number",
+              "value": "={{ $('Embed & Aggregate').first().json.skipped }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a5b15ce3-4055-458c-a2ee-3318a1114668",
+      "name": "Build Error",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        192
+      ],
+      "notesInFlow": true,
+      "notes": "On post-save failure: {success:false, error, postId, inserted, skipped}"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "pG7lqMOeysoZoXQ9",
+          "cachedResultName": "Sub-Workflow: Infographic Generator (DALL·E 3 + QC)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "spec": "={{ $json.spec }}",
+            "style": "={{ $json.style }}",
+            "resolution": "={{ $('Resolve Content').first().json.resolution }}",
+            "fileName": "={{ $json.fileName }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "spec",
+              "displayName": "spec",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "style",
+              "displayName": "style",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "resolution",
+              "displayName": "resolution",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            },
+            {
+              "id": "fileName",
+              "displayName": "fileName",
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "required": false,
+              "display": true
+            }
+          ]
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "b56deb1d-8d95-498e-8f55-fee148bd7097",
+      "name": "Generate",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -1120,
+        528
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notesInFlow": true,
+      "onError": "continueRegularOutput",
+      "notes": "Calls the Infographic Generator per graphic (mode: each). onError = continueRegularOutput so failures stay on the main output (keeps the positional zip aligned)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "go1",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "bbfdb834-ef81-4b14-8a93-18773fdc7a31",
+      "name": "Generated OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -448,
+        464
+      ],
+      "notesInFlow": true,
+      "notes": "generator success = true → Upload Media. false → Build Skip."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Resolve Content').first().json.wpBaseUrl }}{{ $('Vars').first().json.apiPrefix }}/media",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "wordpressApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "alt_text",
+              "value": "={{ $('Loop').item.json.altText }}"
+            },
+            {
+              "name": "title",
+              "value": "={{ $('Loop').item.json.altText }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Disposition",
+              "value": "=attachment; filename=\"{{ $('Loop').item.json.fileName || 'infografika.jpg' }}\""
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "infographic",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "a85f6a21-7614-4530-83ac-153d61dbd816",
+      "name": "Upload Media",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -224,
+        432
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "notesInFlow": true,
+      "onError": "continueErrorOutput",
+      "notes": "POST the JPEG binary to WP /media; sets alt_text + title as query params in the same request. Retry 3×. Error → Build Skip."
+    },
+    {
+      "parameters": {
+        "batchSize": 250,
+        "options": {}
+      },
+      "id": "803674ab-3f7b-446e-89c0-d01dbd714a3e",
+      "name": "Loop",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -672,
+        528
+      ],
+      "notesInFlow": true,
+      "notes": "Single-pass barrier (batchSize 250): processes all graphics in one pass, then the done output runs Embed exactly once - including when there are 0 graphics."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "vp1",
+              "name": "apiPrefix",
+              "type": "string",
+              "value": "/wp-json/wp/v2"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "df9bdf7d-c877-4f4b-aaf4-36f0f1e3bac7",
+      "name": "Vars",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -3040,
+        528
+      ],
+      "notesInFlow": true,
+      "notes": "Central config: apiPrefix (/wp-json/wp/v2), used by Fetch Post and Upload Media."
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nlet content = String($('Resolve Content').first().json.content || \"\");\nconst stripTags = function (s) { return String(s == null ? \"\" : s).replace(/<[^>]*>/g, \" \").replace(/\\s+/g, \" \").trim(); };\nconst headingBefore = /<h[1-6][^>]*>[\\s]*$/i;\nconst findAnchorPos = function (html, anchor) {\n  if (!anchor) return -1;\n  let tocEnd = 0;\n  const tocM = html.match(/id=\"rank-math-toc\"[\\s\\S]*?<\\/nav>/i);\n  if (tocM) tocEnd = tocM.index + tocM[0].length;\n  const tryText = function (needle) {\n    if (!needle || needle.length < 5) return -1;\n    let from = 0, idx, firstBody = -1;\n    while ((idx = html.indexOf(needle, from)) !== -1) {\n      from = idx + 1;\n      if (idx < tocEnd) continue;\n      if (firstBody === -1) firstBody = idx;\n      const pre = html.slice(idx - 60 < 0 ? 0 : idx - 60, idx);\n      if (headingBefore.test(pre)) return idx;\n    }\n    return firstBody;\n  };\n  let p = tryText(anchor);\n  if (p !== -1) return p;\n  const at = stripTags(anchor);\n  p = tryText(at);\n  if (p !== -1) return p;\n  return tryText(at.slice(0, Math.min(50, at.length)));\n};\nconst out = [];\nfor (const it of items) {\n  const g = it.json || {};\n  if (!g.spec || g._noGraphics) continue;\n  if (findAnchorPos(content, String(g.anchor || \"\")) === -1) continue;\n  out.push({ json: g });\n}\nif (out.length === 0) return [{ json: { _noGraphics: true } }];\nreturn out;"
+      },
+      "id": "9e23e27e-fd1a-4f70-82f3-f7ffa5367bce",
+      "name": "Filter Graphics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1344,
+        528
+      ],
+      "notesInFlow": true,
+      "notes": "Keeps only graphics whose anchor actually resolves in the content (same findAnchorPos + TOC-skip as Embed). If none survive, emits a sentinel so the barrier loop still starts."
+    },
+    {
+      "parameters": {
+        "jsCode": "const gen = $input.all();\nconst plan = $('Filter Graphics').all();\nreturn gen.map(function (it, i) {\n  const p = (plan[i] && plan[i].json) || {};\n  return { json: Object.assign({}, it.json, { index: p.index, anchor: p.anchor, altText: p.altText, fileName: p.fileName, style: p.style }), binary: it.binary };\n});"
+      },
+      "id": "64fef6b3-b669-41c0-99d8-49b897b5aa2a",
+      "name": "Attach Meta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -896,
+        528
+      ],
+      "notesInFlow": true,
+      "notes": "ositional zip of Generate's output with Filter Graphics metadata (index/anchor/altText/fileName). Workaround for the Execute-Workflow paired-item bug; preserves the infographic binary"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "br1",
+              "name": "index",
+              "type": "number",
+              "value": "={{ $('Loop').item.json.index }}"
+            },
+            {
+              "id": "br2",
+              "name": "anchor",
+              "type": "string",
+              "value": "={{ $('Loop').item.json.anchor }}"
+            },
+            {
+              "id": "br3",
+              "name": "alt",
+              "type": "string",
+              "value": "={{ $('Loop').item.json.altText }}"
+            },
+            {
+              "id": "br4",
+              "name": "mediaId",
+              "type": "number",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "id": "br5",
+              "name": "sourceUrl",
+              "type": "string",
+              "value": "={{ $json.source_url }}"
+            },
+            {
+              "id": "br6",
+              "name": "status",
+              "type": "string",
+              "value": "inserted"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "22a7f8cc-2266-4fca-9e1c-cbfdbaa240d8",
+      "name": "Build Result",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        432
+      ],
+      "notesInFlow": true,
+      "notes": " Per uploaded graphic: {index, anchor, alt, mediaId, sourceUrl, status:'inserted'}. Read by Embed; returns to Loop."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bs1",
+              "name": "index",
+              "type": "number",
+              "value": "={{ $('Loop').item.json.index }}"
+            },
+            {
+              "id": "bs2",
+              "name": "anchor",
+              "type": "string",
+              "value": "={{ $('Loop').item.json.anchor }}"
+            },
+            {
+              "id": "bs3",
+              "name": "status",
+              "type": "string",
+              "value": "skipped"
+            },
+            {
+              "id": "bs4",
+              "name": "reason",
+              "type": "string",
+              "value": "={{ $json.error?.message ?? $json.error ?? $json.qcReason ?? 'failed' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e866a392-82d2-411d-a88c-5a4c5cd390f0",
+      "name": "Build Skip",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        624
+      ],
+      "notesInFlow": true,
+      "notes": "Per failed graphic (generation or upload): {index, anchor, status:'skipped', reason}. Returns to Loop."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "sv1",
+              "leftValue": "={{ $json.dryRun }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a654fcd1-59f9-4842-a114-668eb7deea06",
+      "name": "Save?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -224,
+        80
+      ],
+      "notesInFlow": true,
+      "notes": " dryRun true → Summary (post NOT saved). false → Update Post."
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Prepare Input": {
+      "main": [
+        [
+          {
+            "node": "Need Fetch?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Need Fetch?": {
+      "main": [
+        [
+          {
+            "node": "Fetch Post",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resolve Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Post": {
+      "main": [
+        [
+          {
+            "node": "Resolve Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Content": {
+      "main": [
+        [
+          {
+            "node": "Plan Infographics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan Infographics": {
+      "main": [
+        [
+          {
+            "node": "Parse Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Post": {
+      "main": [
+        [
+          {
+            "node": "Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate": {
+      "main": [
+        [
+          {
+            "node": "Attach Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generated OK?": {
+      "main": [
+        [
+          {
+            "node": "Upload Media",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Media": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop": {
+      "main": [
+        [
+          {
+            "node": "Embed & Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generated OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger": {
+      "main": [
+        [
+          {
+            "node": "Vars",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vars": {
+      "main": [
+        [
+          {
+            "node": "Prepare Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embed & Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Save?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Plan": {
+      "main": [
+        [
+          {
+            "node": "Filter Graphics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Graphics": {
+      "main": [
+        [
+          {
+            "node": "Generate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Meta": {
+      "main": [
+        [
+          {
+            "node": "Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Result": {
+      "main": [
+        [
+          {
+            "node": "Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Skip": {
+      "main": [
+        [
+          {
+            "node": "Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save?": {
+      "main": [
+        [
+          {
+            "node": "Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "d32692e9-27bc-4c4e-bee4-88c4a5e23383",
+  "meta": {
+    "instanceId": "6dcf187e3445dae15d704b4e932d118198c4659827e2660010276513c3882f6d"
+  },
+  "nodeGroups": [],
+  "id": "CLxrd8nFQNBNwvDA",
+  "tags": []
+}
