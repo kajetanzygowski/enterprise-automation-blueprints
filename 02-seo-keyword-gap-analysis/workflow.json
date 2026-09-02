@@ -1,0 +1,1185 @@
+{
+  "name": "Keyword Gap Analysis",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "domain"
+            },
+            {
+              "name": "competitors",
+              "type": "array"
+            },
+            {
+              "name": "location"
+            },
+            {
+              "name": "language"
+            }
+          ]
+        }
+      },
+      "id": "9874a570-0918-49fe-b2be-9e897f7a656f",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        80,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nlet domain = (item.domain || '').toString().trim().toLowerCase();\ndomain = domain.replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/\\/.*$/, '');\nif (!domain) { throw new Error('Input \"domain\" is required'); }\nlet competitors = item.competitors;\nif (typeof competitors === 'string') { try { competitors = JSON.parse(competitors); } catch (e) { competitors = competitors.split(','); } }\nif (!Array.isArray(competitors)) { throw new Error('Input \"competitors\" must be an array'); }\ncompetitors = competitors.map(c => (c || '').toString().trim().toLowerCase().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/\\/.*$/, '')).filter(Boolean);\nif (competitors.length === 0) { throw new Error('Input \"competitors\" must be a non-empty array'); }\nconst location = (item.location || '').toString().trim();\nconst language = (item.language || '').toString().trim();\nconst sd = $getWorkflowStaticData('global');\nsd.skipped = [];\nreturn [{ json: { domain, competitors, location, language } }];"
+      },
+      "id": "b730fd5f-8063-41ad-937d-57e5c0c32165",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "apiBaseUrl",
+              "value": "https://api.senuto.com/api",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "lang",
+              "value": "pl-PL",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "countryId",
+              "value": 200,
+              "type": "number"
+            },
+            {
+              "id": "a4",
+              "name": "fetchMode",
+              "value": "topLevelDomain",
+              "type": "string"
+            },
+            {
+              "id": "a5",
+              "name": "browserlessUrl",
+              "value": "https://browserless.v2.speedyweb.cloud",
+              "type": "string"
+            },
+            {
+              "id": "a6",
+              "name": "llmModel",
+              "value": "gpt-4o",
+              "type": "string"
+            },
+            {
+              "id": "a22",
+              "name": "openAiUrl",
+              "value": "https://api.openai.com/v1/chat/completions",
+              "type": "string"
+            },
+            {
+              "id": "a23",
+              "name": "positionsPath",
+              "value": "/visibility_analysis/reports/positions/getData",
+              "type": "string"
+            },
+            {
+              "id": "a7",
+              "name": "seedCount",
+              "value": 50,
+              "type": "number"
+            },
+            {
+              "id": "a8",
+              "name": "expandBatchSize",
+              "value": 10,
+              "type": "number"
+            },
+            {
+              "id": "a9",
+              "name": "relatedPerSeed",
+              "value": 200,
+              "type": "number"
+            },
+            {
+              "id": "a10",
+              "name": "competitorPageSize",
+              "value": 500,
+              "type": "number"
+            },
+            {
+              "id": "a11",
+              "name": "competitorMaxPages",
+              "value": 2,
+              "type": "number"
+            },
+            {
+              "id": "a12",
+              "name": "clientPageSize",
+              "value": 500,
+              "type": "number"
+            },
+            {
+              "id": "a13",
+              "name": "clientMaxPages",
+              "value": 4,
+              "type": "number"
+            },
+            {
+              "id": "a14",
+              "name": "top50Cutoff",
+              "value": 50,
+              "type": "number"
+            },
+            {
+              "id": "a15",
+              "name": "minSearches",
+              "value": 10,
+              "type": "number"
+            },
+            {
+              "id": "a16",
+              "name": "commonFactorMin",
+              "value": 1,
+              "type": "number"
+            },
+            {
+              "id": "a17",
+              "name": "relevanceBatch",
+              "value": 100,
+              "type": "number"
+            },
+            {
+              "id": "a24",
+              "name": "minOutputSearches",
+              "value": 0,
+              "type": "number"
+            },
+            {
+              "id": "a18",
+              "name": "csvDelimiter",
+              "value": ",",
+              "type": "string"
+            },
+            {
+              "id": "a19",
+              "name": "systemAnalyze",
+              "value": "Jesteś analitykiem SEO/SEM dla rynku POLSKIEGO. Analiza ZAWSZE dotyczy rynku polskiego (dane z polskiego indeksu Senuto), więc pole market ZAWSZE ustaw na 'Polska, polski' — niezależnie od TLD domeny (.io/.com) czy języka strony. Na podstawie treści strony głównej zwróć obiekt JSON z kluczami: industry (branża), niche (konkretna pod-nisza lub specjalizacja), offer (asortyment lub usługi), profile (profil działalności), market (zawsze 'Polska, polski'), location (KONKRETNE miasto gdy na stronie jest adres, miasto lub dane kontaktowe — np. 'Warszawa', 'Kraków'; region gdy biznes regionalny — np. 'Sudety / Dolny Śląsk'; 'ogólnopolski' tylko gdy naprawdę brak fizycznej lokalizacji, czysty e-commerce lub SaaS), isLocal (true gdy firma ma fizyczny adres i obsługuje głównie okolicę — przychodnia, klinika, hotel, salon, gabinet, restauracja; false tylko dla czystego e-commerce lub SaaS). Jeśli na początku treści jest 'Adres/miasto wykryte na stronie: X' — użyj X jako location oraz ustaw isLocal=true. Pisz zwięźle, po polsku.",
+              "type": "string"
+            },
+            {
+              "id": "a20",
+              "name": "systemSeeds",
+              "value": "Jesteś ekspertem SEO dla rynku polskiego. Otrzymasz opis firmy z polami niche, profile, isLocal. Wygeneruj DOKŁADNIE 50 słów kluczowych po polsku ŚCIŚLE w pod-niszy i profilu klienta — NIE rozjeżdżaj się w ogólną branżę. Gdy klient jest B2B, generuj frazy B2B; gdy nisza jest wąska (np. naturalne/gliniane), trzymaj się tej niszy; gdy usługa jest lokalna, możesz dodać lokalizację klienta. Połowa precyzyjnych fraz long-tail (transakcyjnych, produktowych, usługowych), połowa szerszych kategorialnych, ale wciąż w niszy. Bez duplikatów, małe litery, bez numeracji. Zwróć wyłącznie JSON: {\"seeds\": [\"fraza 1\", \"fraza 2\"]}.",
+              "type": "string"
+            },
+            {
+              "id": "a21",
+              "name": "systemRelevance",
+              "value": "Jesteś ekspertem SEO. Otrzymasz opis klienta (pola niche, location, isLocal, market), ewentualne WYMUSZONE nadpisania (lokalizacja, język), listę domen konkurentów oraz listę fraz. Zwróć WYŁĄCZNIE frazy trafne komercyjnie. NADPISANIA mają PRIORYTET: jeśli 'Wymuszona lokalizacja klienta' jest niepusta i różna od '(brak)' — traktuj klienta jako lokalnego w tym mieście lub regionie i odrzucaj frazy zawierające nazwę INNEGO miasta lub regionu; jeśli 'Wymuszony jezyk fraz' jest niepusty i różny od '(brak)' — odrzucaj frazy w innym języku niż podany (poza nazwami marek, modeli i produktów). ODRZUĆ TAKŻE: frazy czysto informacyjne, poradnikowe i objawowe (nazwy chorób, objawów, badań lub hormonów bez intencji zakupu, definicje, pytania typu jak/co/dlaczego/kiedy) — zostaw komercyjne, transakcyjne, produktowe, usługowe i cenowe (cena, ile kosztuje); frazy spoza niszy klienta; frazy będące nazwą sklepu, serwisu lub domeny konkurenta; gdy nie ma nadpisania lokalizacji a isLocal=true — frazy z innym miastem niż location klienta; oczywiste literówki i frazy bez polskich znaków gdy istnieje poprawny odpowiednik. ZACHOWAJ nazwy modeli i marek produktów lub replik broni (np. glock, mp5, mosin nagant). Zwróć JSON: {\"relevant\": [\"fraza\"]} z frazami z wejścia, w oryginalnej pisowni.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "478021a5-edba-46ce-ac94-0dc505c01442",
+      "name": "Vars",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        752,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "3cSASWq4KARDkNm6"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "35896542-134a-4632-8b25-fa8ab8aaf09f",
+      "name": "Get Token",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1200,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Vars').first().json.openAiUrl }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { model: $('Vars').first().json.llmModel, messages: [ { role: 'system', content: $('Vars').first().json.systemAnalyze + ' DODATKOWA ZASADA (priorytet): jesli firma to sklep internetowy / e-commerce / SaaS lub dziala ogolnopolsko (sygnaly: koszyk, darmowa dostawa, wysylka, kurier, paczkomat, platnosci online) ustaw isLocal=false ORAZ location=ogolnopolski, nawet jesli na stronie jest adres siedziby. Sam adres NIE czyni firmy lokalna.' }, { role: 'user', content: 'Domena: ' + $('Vars').first().json.domain + '\\n\\nTresc strony:\\n' + $json.siteText } ], response_format: { type: 'json_object' }, temperature: 0.2 } }}",
+        "options": {
+          "response": {
+            "response": {}
+          },
+          "timeout": 120000
+        }
+      },
+      "id": "92a6c249-d414-44b0-8e1f-1dc5912352fa",
+      "name": "Analyze Domain",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1872,
+        496
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Vars').first().json.openAiUrl }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { model: $('Vars').first().json.llmModel, messages: [ { role: 'system', content: $('Vars').first().json.systemSeeds }, { role: 'user', content: 'Opis branzy klienta (JSON):\\n' + $json.choices[0].message.content } ], response_format: { type: 'json_object' }, temperature: 0.4 } }}",
+        "options": {
+          "response": {
+            "response": {}
+          },
+          "timeout": 120000
+        }
+      },
+      "id": "108789f0-33de-41a7-9841-46d8e7f28046",
+      "name": "Gen Seeds",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2096,
+        496
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = ($input.first().json.choices && $input.first().json.choices[0] && $input.first().json.choices[0].message.content) || '{}';\nlet seeds = [];\ntry { seeds = JSON.parse(raw).seeds || []; } catch (e) { seeds = []; }\nconst seen = new Set();\nconst out = [];\nfor (let s of seeds) { s = (s || '').toString().trim().toLowerCase(); if (s && !seen.has(s)) { seen.add(s); out.push({ json: { seed: s } }); } }\nconst max = Number($('Vars').first().json.seedCount) || 50;\nreturn out.slice(0, max);"
+      },
+      "id": "4281e753-6bf2-4547-b0db-06ef966c168e",
+      "name": "Seeds Parse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2320,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Vars').first().json.apiBaseUrl }}/keywords_analysis/reports/keyword_details/getRelatedKeywords",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $('Get Token').first().json.senutoToken }}"
+            },
+            {
+              "name": "Lang",
+              "value": "={{ $('Vars').first().json.lang }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { keyword: $json.seed, country_id: $('Vars').first().json.countryId, page: 1, limit: $('Vars').first().json.relatedPerSeed } }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": "={{ $('Vars').first().json.expandBatchSize }}"
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "56183f5a-15c5-4421-a775-0a36ce4e4286",
+      "name": "Expand Phrase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2544,
+        496
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst seeds = $('Seeds Parse').all().map(i => i.json.seed);\nconst minSearches = Number($('Vars').first().json.minSearches) || 0;\nconst minCf = Number($('Vars').first().json.commonFactorMin) || 0;\nconst sd = $getWorkflowStaticData('global'); sd.skipped = sd.skipped || [];\nconst out = [];\nitems.forEach((it, idx) => {\n  const j = it.json; const data = j && j.data;\n  if (!Array.isArray(data)) { sd.skipped.push({ stage: 'expand', key: seeds[idx] != null ? seeds[idx] : idx }); return; }\n  for (const r of data) {\n    const kw = (r.keyword || '').toString().trim(); if (!kw) continue;\n    const searches = Number(r.searches != null ? r.searches : (r.statistics && r.statistics.searches ? r.statistics.searches.current : 0)) || 0;\n    const cpc = r.cpc != null ? r.cpc : (r.statistics && r.statistics.cpc ? r.statistics.cpc.current : null);\n    const cf = Number(r.common_factor) || 0;\n    if (searches < minSearches || cf < minCf) continue;\n    out.push({ json: { keyword: kw, searches, cpc: cpc == null ? null : Number(cpc), common_factor: cf, source: 'seed' } });\n  }\n});\nreturn out;"
+      },
+      "id": "dc3d1063-d2b4-430f-abd8-49de0e1b0407",
+      "name": "Flatten Related",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2768,
+        496
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "853ba7a9-af27-4806-aebf-1ca32a950167",
+      "name": "Merge Pools",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2992,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const competitors = $('Vars').first().json.competitors || [];\nreturn competitors.map(c => ({ json: { competitor: c } }));"
+      },
+      "id": "55c56d99-4136-4cbb-ba2d-5729f2241fef",
+      "name": "Comp To Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2320,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Vars').first().json.apiBaseUrl + $('Vars').first().json.positionsPath }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $('Get Token').first().json.senutoToken }}"
+            },
+            {
+              "name": "Lang",
+              "value": "={{ $('Vars').first().json.lang }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { domain: $json.competitor, fetch_mode: $('Vars').first().json.fetchMode, country_id: $('Vars').first().json.countryId, isDataReadyToLoad: true, order: { prop: 'statistics.searches.current', dir: 'desc' }, limit: $('Vars').first().json.competitorPageSize } }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "pagination": {
+            "pagination": {
+              "parameters": {
+                "parameters": [
+                  {
+                    "type": "body",
+                    "name": "page",
+                    "value": "={{ $pageCount + 1 }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ $response.body.pagination?.has_next_page !== true }}",
+              "requestInterval": 500
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "id": "6ee8fcbd-3e12-47f2-b610-cf46cbdeac49",
+      "name": "Comp Phrases",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2544,
+        688
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst sd = $getWorkflowStaticData('global'); sd.skipped = sd.skipped || [];\nconst out = [];\nitems.forEach((it, idx) => {\n  const j = it.json; const data = j && j.data;\n  if (!Array.isArray(data)) { sd.skipped.push({ stage: 'competitor', key: idx }); return; }\n  for (const r of data) {\n    const kw = (r.keyword || '').toString().trim(); if (!kw) continue;\n    const st = r.statistics || {};\n    const searches = st.searches ? st.searches.current : (r.searches != null ? r.searches : 0);\n    const cpc = st.cpc ? st.cpc.current : (r.cpc != null ? r.cpc : null);\n    out.push({ json: { keyword: kw, searches: Number(searches) || 0, cpc: cpc == null ? null : Number(cpc), source: 'competitor' } });\n  }\n});\nreturn out;"
+      },
+      "id": "f04d97cd-eff0-4310-955e-3074fd42dd1d",
+      "name": "Flatten Comp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2768,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst map = new Map();\nfor (const it of items) {\n  const j = it.json; const kw = (j.keyword || '').toString().trim(); if (!kw) continue;\n  const norm = kw.toLowerCase();\n  const searches = Number(j.searches) || 0;\n  const cpc = j.cpc == null ? null : Number(j.cpc);\n  const ex = map.get(norm);\n  if (!ex) map.set(norm, { keyword: kw, searches, cpc });\n  else { if (searches > ex.searches) ex.searches = searches; if (ex.cpc == null && cpc != null) ex.cpc = cpc; }\n}\nreturn Array.from(map.values()).map(v => ({ json: v }));"
+      },
+      "id": "d8a16ce4-264a-4edc-9d06-d9c0c65c6387",
+      "name": "Build Bulk",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3216,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Vars').first().json.apiBaseUrl + $('Vars').first().json.positionsPath }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $('Get Token').first().json.senutoToken }}"
+            },
+            {
+              "name": "Lang",
+              "value": "={{ $('Vars').first().json.lang }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { domain: $('Vars').first().json.domain, fetch_mode: $('Vars').first().json.fetchMode, country_id: $('Vars').first().json.countryId, isDataReadyToLoad: true, order: { prop: 'statistics.searches.current', dir: 'desc' }, limit: $('Vars').first().json.clientPageSize } }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "pagination": {
+            "pagination": {
+              "parameters": {
+                "parameters": [
+                  {
+                    "type": "body",
+                    "name": "page",
+                    "value": "={{ $pageCount + 1 }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ $response.body.pagination?.has_next_page !== true }}",
+              "requestInterval": 500
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "id": "5ee591f7-2f2a-4255-8350-4edbef7456a6",
+      "name": "Client Pos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3440,
+        592
+      ],
+      "executeOnce": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst cutoff = Number($('Vars').first().json.top50Cutoff) || 50;\nconst top50 = [];\nfor (const it of items) {\n  const j = it.json; const data = j && j.data;\n  if (!Array.isArray(data)) continue;\n  for (const r of data) {\n    const pos = r.statistics && r.statistics.position ? r.statistics.position.current : null;\n    const kw = (r.keyword || '').toString().trim().toLowerCase();\n    if (kw && pos != null && pos > 0 && pos <= cutoff) top50.push(kw);\n  }\n}\nreturn [{ json: { top50: Array.from(new Set(top50)) } }];"
+      },
+      "id": "d8d676da-219a-4b47-b4cb-993b713d0978",
+      "name": "Top50 Set",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3664,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const bulk = $('Build Bulk').all().map(i => i.json);\nconst top50 = new Set(($input.first().json.top50) || []);\nconst out = [];\nfor (const b of bulk) {\n  const norm = (b.keyword || '').toString().trim().toLowerCase();\n  if (!norm) continue;\n  if (top50.has(norm)) continue;\n  out.push({ json: b });\n}\nreturn out;"
+      },
+      "id": "4ef80494-3b9a-424d-8ade-454862316d0b",
+      "name": "Subtract Top50",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3888,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all().map(i => i.json);\nconst size = Number($('Vars').first().json.relevanceBatch) || 100;\nconst chunks = [];\nfor (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));\nreturn chunks.map(c => ({ json: { phrases: c.map(x => x.keyword) } }));"
+      },
+      "id": "4774f28e-3b13-40cc-8d6c-a08a9e63634c",
+      "name": "Chunk Phrases",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5008,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Vars').first().json.openAiUrl }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { model: $('Vars').first().json.llmModel, messages: [ { role: 'system', content: $('Vars').first().json.systemRelevance.replace(/ZACHOWAJ[\\s\\S]*?marek[\\s\\S]*?\\)\\./i, ' ') + ' ' + $('Vars Extra').first().json.relevanceHardNamesRule }, { role: 'user', content: 'Branza klienta (JSON):\\n' + $('Analyze Domain').first().json.choices[0].message.content + '\\n\\nWymuszona lokalizacja klienta: ' + ($('Validate Input').first().json.location || '(brak)') + '\\nWymuszony jezyk fraz: ' + ($('Validate Input').first().json.language || '(brak)') + '\\n\\nDomeny konkurentow (odrzuc ich nazwy marek): ' + JSON.stringify($('Vars').first().json.competitors) + '\\n\\nFrazy do oceny:\\n' + JSON.stringify($json.phrases) } ], response_format: { type: 'json_object' }, temperature: 0 } }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 5
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "id": "778287e2-6e40-41c7-94c2-c64b9895ef04",
+      "name": "LLM Relevance",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        5232,
+        592
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "const relevant = new Set();\nfor (const it of $input.all()) {\n  const raw = (it.json.choices && it.json.choices[0] && it.json.choices[0].message.content) || '{}';\n  try { const arr = JSON.parse(raw).relevant || []; for (const k of arr) relevant.add((k || '').toString().trim().toLowerCase()); } catch (e) {}\n}\nconst gap = $('Hard Filter').all().map(i => i.json);\nconst seen = new Set();\nconst out = [];\nfor (const g of gap) {\n  const norm = (g.keyword || '').toString().trim().toLowerCase();\n  if (relevant.has(norm) && !seen.has(norm)) { seen.add(norm); out.push({ json: g }); }\n}\nreturn out;"
+      },
+      "id": "3637491e-92db-4aeb-b218-91b2c341eb09",
+      "name": "Parse Relevance",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5456,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json).filter(r => r && (r.keyword || '').toString().trim()).sort((a, b) => (Number(b.searches) || 0) - (Number(a.searches) || 0));\nreturn rows.map(r => ({ json: { 'Słowo kluczowe': r.keyword, 'Śr. mies. liczba wyszukiwań': Number(r.searches) || 0, 'CPC (PLN)': r.cpc == null ? '' : Number(r.cpc) } }));"
+      },
+      "id": "0ca5579e-49db-48a2-8893-afd0edbba46d",
+      "name": "Map Columns",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5680,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "delimiter": "={{ $('Vars').first().json.csvDelimiter }}",
+          "fileName": "={{ 'keyword-gap-' + $('Vars').first().json.domain + '.csv' }}",
+          "headerRow": true
+        }
+      },
+      "id": "04bfa240-6834-4ccc-9c7a-d146f9557b9b",
+      "name": "To CSV",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        5904,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const it = $input.first();\nconst sd = $getWorkflowStaticData('global');\nconst skipped = sd.skipped || [];\nlet rowCount = 0;\ntry { rowCount = $('Map Columns').all().length; } catch (e) {}\nconst out = { json: { rowCount, skippedCount: skipped.length, skipped } };\nif (it && it.binary) out.binary = it.binary;\nreturn [out];"
+      },
+      "id": "aea1f953-c10a-45be-9328-53e0a74ed4be",
+      "name": "Output Meta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6128,
+        592
+      ],
+      "notes": "Dokleja do wyjscia metadane: rowCount (liczba fraz w CSV) + skippedCount/skipped (pominiete zapytania Senuto z workflowStaticData). Zachowuje binarke 'data' (CSV)."
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all().map(i => i.json);\nconst minVol = Number($('Vars').first().json.minOutputSearches) || 0;\nconst strip = s => (s || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[Łł]/g, 'l').toLowerCase();\nconst hasPL = s => /[ąćęłńóśźż]/i.test(s || '');\nconst stop = new Set(['sklep','sklepy','internetowy','internetowe','internetowa','online','z','ze','do','na','dla','i','w','meski','meskie','meska','damski','damskie','damska']);\nconst canon = s => { const t = strip(s).replace(/[^a-z0-9 ]/g, ' ').split(/\\s+/).filter(Boolean).map(w => w.replace(/(y|i|e|ow|a)$/, '')).filter(w => !stop.has(w) && w.length > 1).sort().join(' '); return t || strip(s); };\nconst groups = new Map();\nfor (const it of items) {\n  const s = Number(it.searches) || 0;\n  if (s < minVol) continue;\n  const key = canon(it.keyword);\n  const cur = groups.get(key);\n  if (!cur) { groups.set(key, it); continue; }\n  const sc = Number(cur.searches) || 0;\n  let better = false;\n  if (s > sc) better = true;\n  else if (s === sc) {\n    if (hasPL(it.keyword) && !hasPL(cur.keyword)) better = true;\n    else if (hasPL(it.keyword) === hasPL(cur.keyword) && (it.keyword || '').length < (cur.keyword || '').length) better = true;\n  }\n  if (better) groups.set(key, it);\n}\nreturn Array.from(groups.values()).map(v => ({ json: v }));"
+      },
+      "id": "88756bb6-3012-4cbf-a4a9-a959a6b1ad09",
+      "name": "Normalize Dedup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4112,
+        592
+      ],
+      "notes": "Scala bliskie duplikaty (bez polskich znakow + l.poj./mn. + szyk slow + stopwords typu sklep/internetowy) do jednej formy o najwyzszym wolumenie (preferuje pisownie z ogonkami). Opcjonalny prog min. wolumenu: Vars.minOutputSearches (0 = wylaczony)."
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all().map(i => i.json);\nconst vi = $('Validate Input').first().json;\nconst strip = s => (s || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[Łł]/g, 'l').toLowerCase();\nconst loc = strip(vi.location || '').trim();\nconst lang = (vi.language || '').toString().toLowerCase().trim();\nconst comps = (($('Vars').first().json.competitors) || []).map(c => strip(c).split('.')[0]).filter(c => c.length >= 6);\nconst priceRe = /(cena|cennik|koszt|kosztuj|dofinans|refund|abonament|promocj|rabat|najtan|wycen|oferta|nfz)/;\nconst infoRe = /(\\bjak\\b|\\bjaka\\b|\\bjaki\\b|\\bjakie\\b|\\bczy\\b|\\bkiedy\\b|\\bdlaczego\\b|\\bczemu\\b|\\bco to\\b|co zrobic|na czym|ile razy|ile trwa|ile dni|objawy|\\bdieta\\b|\\bszanse\\b|powodzeni|skutecznosc|jak wyglada|jak przebiega|\\bprzebieg\\b|przeciwwskazani|\\betapy\\b|przyczyny|zalecenia|przygotowac|przygotowani|opinie|statystyk|znaczeni|definicj|forum|krok po kroku|w ktorym dniu|domowe sposoby)/;\nconst CITIES = ['warszawa','krakow','poznan','wroclaw','gdansk','lodz','katowice','szczecin','lublin','bydgoszcz','gdynia','torun','kielce','rzeszow','olsztyn','opole','czestochowa','radom','sosnowiec','gliwice','zabrze','bialystok','jelenia gora','plock','slupsk','walbrzych','bytom','rybnik','tychy','elblag','tarnow','chorzow','kalisz','koszalin','legnica','wloclawek','nysa','nowy sacz'];\nconst PLW = ['kalendarz','rezerwacj','spotka','termin','wizyt','aplikacj','narzedzi','darmo','abonament','cennik','cena','koszt','firm','biur','klient','obslug','zarzadz','platnosc','przypomnie','faktur','umawia','grafik'];\nconst ENG = ['appointment','calendar','booking','scheduling','shared','sharing','team ','pricing','doodle','meeting','planner','make ','widget','admin','create','management','reminder','staff','customer','software','account'];\nconst out = [];\nfor (const it of items) {\n  const kw = (it.keyword || '').toString();\n  const n = strip(kw);\n  if (comps.some(b => n.includes(b))) continue;\n  if (infoRe.test(n) && !priceRe.test(n)) continue;\n  if (loc) { const c = CITIES.find(x => n.includes(x)); if (c && !loc.includes(c) && !c.includes(loc)) continue; }\n  if (lang.startsWith('pl')) { const hasPL = /[ąćęłńóśźż]/i.test(kw) || PLW.some(w => n.includes(w)); const looksEng = ENG.some(t => n.includes(t.trim())); if (!hasPL && looksEng) continue; }\n  out.push({ json: it });\n}\nreturn out;"
+      },
+      "id": "e448f475-f897-402f-8ee2-43e499de7462",
+      "name": "Hard Filter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4784,
+        592
+      ],
+      "notes": "Twardy deterministyczny filtr po LLM: (1) odrzuca frazy informacyjne/poradnikowe (jak/co to/na czym/objawy/dieta/szanse/skutecznosc/opinie...) z wyjatkiem cenowych; (2) gdy override location - tnie inne miasta; (3) gdy override language=pl - tnie czysto angielskie (z whitelista PL). Domyka to, czego LLM relevance nie dowozi."
+    },
+    {
+      "parameters": {
+        "dataToSave": {
+          "values": [
+            {
+              "key": "domain",
+              "value": "={{ $json.domain }}"
+            },
+            {
+              "key": "competitors",
+              "value": "={{ $json.competitors.join(', ') }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executionData",
+      "typeVersion": 1.1,
+      "position": [
+        304,
+        592
+      ],
+      "id": "56098a11-8d11-4d7c-975e-a2223ece0391",
+      "name": "Execution Data"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Vars').first().json.openAiUrl }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { model: $('Vars Extra').first().json.searchModel, web_search_options: {}, messages: [ { role: 'system', content: 'Jestes researcherem firm dla rynku polskiego. Na podstawie wyszukiwania w internecie opisz RZECZOWO firme dzialajaca pod podana domena: czym sie zajmuje, branza, nisza/specjalizacja, glowny asortyment lub uslugi, model biznesowy (sklep internetowy / uslugi lokalne / SaaS, B2B czy B2C) oraz zasieg (ogolnopolski czy lokalny). Po polsku, zwiezle i konkretnie, bez marketingowych ozdobnikow. Jesli czegos nie ustalisz na pewno, napisz brak danych i NIE zgaduj z samej nazwy domeny.' }, { role: 'user', content: 'Domena do zbadania: ' + $('Vars').first().json.domain } ] } }}",
+        "options": {
+          "response": {
+            "response": {}
+          },
+          "timeout": 120000
+        }
+      },
+      "id": "1326f744-2bc8-45f1-99bb-679f51ae7ebf",
+      "name": "WebSearch Domain",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1424,
+        496
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Mapuje odpowiedz OpenAI web search na pole siteText dla Analyze Domain\nconst c = $input.first().json?.choices?.[0]?.message?.content || '';\nreturn [{ json: { domain: $('Vars').first().json.domain, title: '', metaDesc: '', detectedCity: '', siteText: c } }];"
+      },
+      "id": "7d07f306-fb40-4978-964b-6161b24d31c9",
+      "name": "WS To Site Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1648,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prog min. wolumenu z Vars Extra.minGapSearches (fallback 25): tnie dlugi ogon PRZED Hard Filter i LLM Relevance.\nconst MIN = Number($('Vars Extra').first().json.minGapSearches) || 25;\nreturn $input.all().filter(it => (Number(it.json.searches) || 0) >= MIN);"
+      },
+      "id": "9c583423-be3e-4553-a32a-1a0197f5237d",
+      "name": "Min Volume",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4336,
+        592
+      ],
+      "notes": "Prog min. wolumenu (MIN=25 wyszukiwan/mies.). Tnie niskowartosciowy dlugi ogon PRZED Hard Filter i LLM Relevance -> mniejszy koszt OpenAI + mniejszy CSV. Zmien MIN w kodzie, by regulowac (np. 10 / 25 / 50)."
+    },
+    {
+      "parameters": {
+        "jsCode": "// TWARDY FILTR ENCJI: miasta + imiona (GitHub, cache 30 dni + fallback) + adresy/ulice/kody.\nconst items = $input.all();\nconst helpers = this.helpers;\nconst sd = $getWorkflowStaticData('global');\nconst strip = s => (s || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[Łł]/g, 'l').toLowerCase().trim();\nconst CITIES_URL = 'https://raw.githubusercontent.com/bukowa/polskie-miasta/master/miasta_.json';\nconst NAMES_URL = 'https://raw.githubusercontent.com/denmats/imiona_polskie/master/imiona_polskie.csv';\nconst FB_CITIES = ['warszawa','krakow','lodz','wroclaw','poznan','gdansk','szczecin','bydgoszcz','lublin','katowice','bialystok','gdynia','czestochowa','radom','torun','sosnowiec','rzeszow','kielce','gliwice','olsztyn','zabrze','bytom','rybnik','opole','tychy','plock','elblag','walbrzych','wloclawek','tarnow','chorzow','koszalin','kalisz','legnica','slupsk','jaworzno','konin','inowroclaw','lubin','suwalki','gniezno','glogow','leszno','zamosc','przemysl','zakopane','sopot','pruszkow','swidnica','tczew','pila','zgierz','mielec','bedzin','raciborz'];\nconst FB_NAMES = ['jan','anna','piotr','maria','andrzej','krzysztof','katarzyna','tomasz','magdalena','marcin','agnieszka','pawel','barbara','michal','marek','jakub','adam','jerzy','wojciech','robert','grzegorz','lukasz','kamil','bartosz','filip','rafal','damian','sebastian','mateusz','natalia','aleksandra','weronika','wiktoria','marta','emilia','justyna','karolina','monika','dorota','beata'];\nconst CITY_EXCLUDE = new Set(['biala','gora','wola','nowe','stare','ruda','kamien','dab','brzeg','debno','kock','lipie','makow','deba','leba','mrocza','slesin','kolo','warta','kozy','sucha','pisz','reda','hel','rabka','wlen','nowa','stara','laziska','serock','biskupiec']);\nconst NAME_EXCLUDE = new Set(['pola','maja','lena','lana','rena','nela','tola','ina','ala','ola','ewa','iga','mai','sela','lola','nora','rosa','gaja']);\nasync function get(url) { try { return await helpers.httpRequest({ method: 'GET', url, timeout: 12000 }); } catch (e) { return null; } }\nconst DAY = 86400000;\nlet lists = sd.entityLists;\nif (!lists || !lists.ts || (Date.now() - lists.ts) > 30 * DAY) {\n  let cities = [], names = [];\n  let cj = await get(CITIES_URL);\n  if (typeof cj === 'string') { try { cj = JSON.parse(cj); } catch (e) { cj = null; } }\n  if (Array.isArray(cj)) cities = cj.map(x => strip(x && x.text_simple)).filter(Boolean);\n  let nt = await get(NAMES_URL);\n  if (typeof nt === 'string') names = nt.split(/\\r?\\n/).map(strip).filter(w => w && w !== 'imie');\n  const ok = cities.length >= 100 && names.length >= 50;\n  if (cities.length < 100) cities = FB_CITIES;\n  if (names.length < 50) names = FB_NAMES;\n  lists = { ts: Date.now(), cities: cities, names: names, src: ok ? 'github' : 'fallback' };\n  sd.entityLists = lists;\n}\nconst CITY1 = new Set(), CITY2 = [];\nfor (const c of lists.cities) { if (!c || c.length < 4 || CITY_EXCLUDE.has(c)) continue; if (c.indexOf(' ') >= 0 || c.indexOf('-') >= 0) CITY2.push(c); else CITY1.add(c); }\nconst NAMES = new Set();\nfor (const nm of lists.names) { if (nm && nm.length >= 3 && !NAME_EXCLUDE.has(nm)) NAMES.add(nm); }\nconst STREET = new Set(['ul','ulica','aleja','aleje','al','os','osiedle','plac','pl','rondo']);\nconst postal = /\\d{2}-\\d{3}/;\nconst out = [];\nfor (const it of items) {\n  const n = strip(it.json.keyword);\n  if (postal.test(n)) continue;\n  if (CITY2.length && CITY2.some(c => n.indexOf(c) >= 0)) continue;\n  const words = n.split(/[^a-z0-9]+/).filter(Boolean);\n  if (words.some(w => STREET.has(w) || CITY1.has(w) || NAMES.has(w))) continue;\n  out.push(it);\n}\nreturn out;"
+      },
+      "id": "7efb1244-b018-429d-b3cb-78a0138d792d",
+      "name": "Entity Filter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4560,
+        592
+      ],
+      "notes": "TWARDY FILTR ENCJI (deterministyczny): usuwa frazy z miejscowosciami, adresami, ulicami, kodami pocztowymi i imionami (listy + wzorce). Nazwiska/marki/firmy/nazwy wlasne domyka warstwa LLM Relevance (prompt). Listy CITY/NAMES sa edytowalne w kodzie."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e1",
+              "name": "searchModel",
+              "value": "gpt-4o-search-preview",
+              "type": "string"
+            },
+            {
+              "id": "e2",
+              "name": "minGapSearches",
+              "value": 25,
+              "type": "number"
+            },
+            {
+              "id": "e3",
+              "name": "relevanceHardNamesRule",
+              "value": "TWARDY FILTR NAZW WLASNYCH (priorytet, nadrzedny nad pozostalymi zasadami): ODRZUC kazda fraze zawierajaca: nazwe miejscowosci/miasta/wsi/dzielnicy, adres, ulice, kod pocztowy, imie, nazwisko; nazwe firmy/sklepu/marki/producenta (np. glock, victorinox, lowa, leatherman, fenix, tikkurila); OZNACZENIE MODELU takze alfanumeryczne (np. ak 47, m4, m16, mp5, ak 74, g36); METODE lub technike nazwana od nazwiska (np. mckenzie, bobath, vojta, kaltenborn, pnf); oraz dowolna inna nazwe wlasna. ODRZUC TAKZE gdy nazwa wlasna jest tylko dodatkiem do czesci ogolnej - przyklady do odrzucenia: cwiczenia mckenziego, tlumik do ak 47, akcesoria leatherman, latarka fenix. Zostaw WYLACZNIE ogolne, generyczne frazy produktowe/uslugowe BEZ zadnej nazwy wlasnej.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "65ded4e0-99a0-4e4a-aedb-0d8d4da602ea",
+      "name": "Vars Extra",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        976,
+        592
+      ],
+      "notes": "Dodatkowe tunable (poza glownym Vars): searchModel (model web search), minGapSearches (prog Min Volume), relevanceHardNamesRule (regula twardego filtra nazw wlasnych dla LLM Relevance). Trzymane osobno, by nie ruszac dlugich promptow a19-a21."
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "domain": "bankietowo.pl",
+          "competitors": [
+            "krzeslaonline.pl",
+            "mextra.pl",
+            "sawenta.pl"
+          ],
+          "location": "",
+          "language": ""
+        }
+      }
+    ]
+  },
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Execution Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Vars",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Token": {
+      "main": [
+        [
+          {
+            "node": "Comp To Items",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "WebSearch Domain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gen Seeds": {
+      "main": [
+        [
+          {
+            "node": "Seeds Parse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seeds Parse": {
+      "main": [
+        [
+          {
+            "node": "Expand Phrase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Expand Phrase": {
+      "main": [
+        [
+          {
+            "node": "Flatten Related",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Pools": {
+      "main": [
+        [
+          {
+            "node": "Build Bulk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comp To Items": {
+      "main": [
+        [
+          {
+            "node": "Comp Phrases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comp Phrases": {
+      "main": [
+        [
+          {
+            "node": "Flatten Comp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flatten Comp": {
+      "main": [
+        [
+          {
+            "node": "Merge Pools",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Build Bulk": {
+      "main": [
+        [
+          {
+            "node": "Client Pos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Client Pos": {
+      "main": [
+        [
+          {
+            "node": "Top50 Set",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Top50 Set": {
+      "main": [
+        [
+          {
+            "node": "Subtract Top50",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chunk Phrases": {
+      "main": [
+        [
+          {
+            "node": "LLM Relevance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Relevance": {
+      "main": [
+        [
+          {
+            "node": "Parse Relevance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Columns": {
+      "main": [
+        [
+          {
+            "node": "To CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flatten Related": {
+      "main": [
+        [
+          {
+            "node": "Merge Pools",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "To CSV": {
+      "main": [
+        [
+          {
+            "node": "Output Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Subtract Top50": {
+      "main": [
+        [
+          {
+            "node": "Normalize Dedup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hard Filter": {
+      "main": [
+        [
+          {
+            "node": "Chunk Phrases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Relevance": {
+      "main": [
+        [
+          {
+            "node": "Map Columns",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execution Data": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WebSearch Domain": {
+      "main": [
+        [
+          {
+            "node": "WS To Site Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WS To Site Text": {
+      "main": [
+        [
+          {
+            "node": "Analyze Domain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Domain": {
+      "main": [
+        [
+          {
+            "node": "Gen Seeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Dedup": {
+      "main": [
+        [
+          {
+            "node": "Min Volume",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Min Volume": {
+      "main": [
+        [
+          {
+            "node": "Entity Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entity Filter": {
+      "main": [
+        [
+          {
+            "node": "Hard Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vars": {
+      "main": [
+        [
+          {
+            "node": "Vars Extra",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vars Extra": {
+      "main": [
+        [
+          {
+            "node": "Get Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "44f67196-0f0b-4253-a35a-f949e1ea8274",
+  "meta": {
+    "instanceId": "6dcf187e3445dae15d704b4e932d118198c4659827e2660010276513c3882f6d"
+  },
+  "nodeGroups": [],
+  "id": "ERDd2SgVGTs0ChRN",
+  "tags": []
+}
