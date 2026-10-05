@@ -1,6 +1,6 @@
 # Enterprise Process Automation & AI Integration Blueprints
 
-A collection of reference automation workflows built with **n8n** and **Make.com**, integrating LLM reasoning (OpenAI GPT-4o, Google Gemini), deterministic data pipelines, external APIs, and CRM platforms.
+A collection of reference automation workflows built with **n8n** and **Make.com**, integrating LLM reasoning (OpenAI GPTs, Google Gemini), deterministic data pipelines, external APIs, and CRM platforms.
 
 ## Projects Overview
 
